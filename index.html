@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gestor de Tareas</title>
+  <!-- TailwindCSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --brand:#8b0000; }
+    body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .card { @apply bg-white rounded-2xl shadow-lg p-6; }
+    .btn { @apply rounded-2xl px-4 py-2 font-semibold shadow; }
+    .btn-primary { @apply bg-black text-white; }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-outline { @apply border border-gray-300 bg-white; }
+    .field { @apply w-full border border-gray-300 rounded-xl px-3 py-2; }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-50">
+  <!-- Header -->
+  <header class="w-full bg-white shadow-sm">
+    <div class="max-w-5xl mx-auto px-4 py-4 flex items-center gap-4">
+      <!-- Coloca tu imagen en ./assets/logo-epoem.png -->
+      <img src="assets/logo-epoem.png" alt="Logo" class="w-14 h-14 object-contain" />
+      <h1 class="text-2xl md:text-3xl font-bold">Gestor de Tareas</h1>
+      <div class="ml-auto flex items-center gap-2 text-sm">
+        <span class="hidden sm:inline text-gray-500">Preparatoria · Módulo Guerrero Tlahuicole</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 py-6">
+    <!-- Selector de rol -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div class="card">
+        <h2 class="text-xl font-semibold mb-2">Acceso Docente</h2>
+        <p class="text-gray-600 mb-4">Para agregar y gestionar tareas por grupo y fecha.</p>
+        <label class="block text-sm font-medium mb-1" for="teacherKey">Clave de acceso</label>
+        <input id="teacherKey" type="password" class="field" placeholder="Escribe la clave" />
+        <button id="btnTeacher" class="btn btn-primary mt-3 w-full">Entrar como Docente</button>
+        <p id="teacherError" class="text-red-600 text-sm mt-2 hidden">Clave incorrecta.</p>
+      </div>
+      <div class="card">
+        <h2 class="text-xl font-semibold mb-2">Acceso Estudiante</h2>
+        <p class="text-gray-600 mb-4">Consulta la tarea del día por grupo, sin contraseña.</p>
+        <button id="btnStudent" class="btn btn-outline w-full">Entrar como Estudiante</button>
+      </div>
+    </div>
+
+    <!-- Panel Estudiante -->
+    <section id="studentPanel" class="card hidden">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold">Estudiante</h3>
+        <button class="btn btn-outline" onclick="hidePanels()">← Volver</button>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <div>
+          <label class="block text-sm font-medium mb-1">Grupo</label>
+          <select id="studentGroup" class="field"></select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Fecha</label>
+          <input id="studentDate" type="date" class="field" />
+        </div>
+        <div class="md:col-span-2">
+          <button id="btnFetchTask" class="btn btn-primary w-full md:w-auto">Ver tarea</button>
+        </div>
+      </div>
+      <div id="studentTask" class="mt-4 bg-gray-100 rounded-xl p-4 min-h-[90px]"></div>
+    </section>
+
+    <!-- Panel Docente -->
+    <section id="teacherPanel" class="card hidden">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold">Docente</h3>
+        <button class="btn btn-outline" onclick="hidePanels()">← Volver</button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <div>
+          <label class="block text-sm font-medium mb-1">Grupo</label>
+          <select id="teacherGroup" class="field"></select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Fecha</label>
+          <input id="teacherDate" type="date" class="field" />
+        </div>
+        <div class="md:col-span-2 flex gap-2">
+          <input id="newGroup" class="field flex-1" placeholder="Agregar nuevo grupo (ej. 201)" />
+          <button id="btnAddGroup" class="btn btn-outline">Agregar</button>
+        </div>
+      </div>
+
+      <label class="block text-sm font-medium mt-4 mb-1">Tarea (una por grupo y fecha)</label>
+      <textarea id="taskText" class="field min-h-[140px]" placeholder="Escribe aquí la tarea..."></textarea>
+
+      <div class="flex flex-wrap gap-2 mt-4">
+        <button id="btnSaveTask" class="btn btn-primary">Guardar / Actualizar</button>
+        <button id="btnLoadCurrent" class="btn btn-outline">Cargar existente</button>
+        <span id="saveMsg" class="text-sm ml-2"></span>
+      </div>
+    </section>
+
+    <footer class="text-center text-xs text-gray-500 mt-10">
+      Hecho con ❤️ para la comunidad. Funciona en GitHub Pages usando Firebase Firestore.
+    </footer>
+  </main>
+
+  <!-- Firebase (v10+) SDKs -->
+ <script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js";
+  import { getFirestore, doc, getDoc, setDoc, getDocs, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js";
+
+  // ⚠️ Reemplaza con tu config de Firebase
+  const firebaseConfig = {
+    apiKey: "TU_API_KEY",
+    authDomain: "TU_AUTH_DOMAIN",
+    projectId: "TU_PROJECT_ID",
+    storageBucket: "TU_STORAGE_BUCKET",
+    messagingSenderId: "TU_SENDER_ID",
+    appId: "TU_APP_ID"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  const byId = id => document.getElementById(id);
+  const teacherPanel = byId('teacherPanel');
+  const studentPanel = byId('studentPanel');
+  const teacherGroup = byId('teacherGroup');
+  const studentGroup = byId('studentGroup');
+
+  function show(el){ el.classList.remove('hidden'); }
+  function hide(el){ el.classList.add('hidden'); }
+  function hidePanels(){ hide(teacherPanel); hide(studentPanel); }
+
+  // ---------------- GRUPOS ----------------
+  const DEFAULT_GROUPS = ["101","102","301"];
+
+  async function ensureDefaultGroups() {
+    for (const g of DEFAULT_GROUPS) {
+      const ref = doc(db, "groups", g);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) {
+        await setDoc(ref, { name: g, createdAt: serverTimestamp() });
+      }
+    }
+  }
+
+  async function loadGroups() {
+    await ensureDefaultGroups();
+    const snap = await getDocs(collection(db, "groups"));
+    const groups = [];
+    snap.forEach(d => groups.push(d.id));
+    groups.sort((a,b)=>a.localeCompare(b));
+
+    const opts = groups.map(g => `<option value="${g}">${g}</option>`).join("");
+    teacherGroup.innerHTML = opts;
+    studentGroup.innerHTML = opts;
+  }
+
+  // Agregar nuevo grupo
+  byId('btnAddGroup').addEventListener('click', async () => {
+    const ng = byId('newGroup').value.trim();
+    if(!ng) return;
+    const ref = doc(db, "groups", ng);
+    await setDoc(ref, { name: ng, createdAt: serverTimestamp() });
+    byId('newGroup').value = '';
+    await loadGroups();
+  });
+
+  // ---------------- ACCESO ----------------
+  const TEACHER_KEY = "Bateson";
+  byId('btnTeacher').addEventListener('click', () => {
+    const typed = byId('teacherKey').value.trim();
+    if (typed === TEACHER_KEY){
+      hidePanels(); show(teacherPanel);
+    } else {
+      byId('teacherError').classList.remove('hidden');
+    }
+  });
+
+  byId('btnStudent').addEventListener('click', () => {
+    hidePanels(); show(studentPanel);
+  });
+
+  // ---------------- TAREAS ----------------
+  function keyFor(group, date){ return `${group}_${date}`; }
+
+  async function loadTask(group, date){
+    const ref = doc(db, "tasks", keyFor(group, date));
+    const snap = await getDoc(ref);
+    return snap.exists() ? snap.data() : null;
+  }
+
+  async function saveTask(group, date, text){
+    const ref = doc(db, "tasks", keyFor(group, date));
+    await setDoc(ref, { group, date, text, updatedAt: serverTimestamp() }, { merge: true });
+  }
+
+  // Docente: cargar existente
+  byId('btnLoadCurrent').addEventListener('click', async () => {
+    const group = teacherGroup.value; const date = byId('teacherDate').value;
+    if(!group || !date) return alert('Selecciona grupo y fecha');
+    const data = await loadTask(group, date);
+    byId('taskText').value = data?.text || '';
+    byId('saveMsg').textContent = data ? 'Tarea cargada.' : 'No hay tarea guardada para esa fecha.';
+  });
+
+  // Docente: guardar
+  byId('btnSaveTask').addEventListener('click', async () => {
+    const group = teacherGroup.value; const date = byId('teacherDate').value; const text = byId('taskText').value.trim();
+    if(!group || !date) return alert('Selecciona grupo y fecha');
+    if(!text) return alert('Escribe la tarea');
+    await saveTask(group, date, text);
+    byId('saveMsg').textContent = 'Tarea guardada ✅';
+    setTimeout(()=> byId('saveMsg').textContent='', 2500);
+  });
+
+  // Estudiante: ver tarea
+  byId('btnFetchTask').addEventListener('click', async () => {
+    const group = studentGroup.value; const date = byId('studentDate').value;
+    if(!group || !date) return alert('Selecciona grupo y fecha');
+    const res = await loadTask(group, date);
+    const box = byId('studentTask');
+    if(res?.text){
+      box.innerHTML = `<div class="whitespace-pre-wrap">${res.text.replace(/</g,'&lt;')}</div>`;
+    } else {
+      box.textContent = 'No hay tarea publicada para ese día.';
+    }
+  });
+
+  // Inicializar
+  loadGroups();
+
+  // Fecha de hoy automática
+  const today = new Date().toISOString().slice(0,10);
+  byId('studentDate').value = today;
+  byId('teacherDate').value = today;
+</script>
+
+</body>
+</html>
